@@ -1,0 +1,91 @@
+# 智康云枢 - Docker容器化部署 Profile
+# 激活方式: SPRING_PROFILES_ACTIVE=docker
+# 所有中间件地址使用Docker服务名(同一网络内通过容器名通信)
+
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /
+
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:nacos1:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        group: ZHEALTH_GROUP
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:nacos1:8848}
+        file-extension: yaml
+        shared-configs:
+          - data-id: common-config.yaml
+            group: DEFAULT_GROUP
+            refresh: true
+          - data-id: redis-config.yaml
+            group: DEFAULT_GROUP
+            refresh: true
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:mysql-master}:${MYSQL_PORT:3306}/zhihealth?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: ${MYSQL_ROOT_PASSWORD:123456}
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      connection-timeout: 30000
+      max-lifetime: 600000
+
+  redis:
+    host: ${REDIS_HOST:redis-master}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: 0
+    lettuce:
+      pool:
+        max-active: 16
+        max-wait: -1ms
+        max-idle: 8
+        min-idle: 2
+      shutdown-timeout: 100ms
+
+# MyBatis-Plus
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.zhihealth.*.entity
+  global-config:
+    db-config:
+      id-type: assign_id
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# Actuator健康检查（Docker HEALTHCHECK依赖此端点）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+# 日志配置（输出到stdout，便于docker logs查看）
+logging:
+  level:
+    root: INFO
+    com.zhihealth: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: /dev/null  # Docker环境不写文件，只输出到stdout
+
+# 应用信息
+app:
+  ollama:
+    url: ${OLLAMA_URL:http://host.docker.internal:11434}
+    model: ${OLLAMA_MODEL:qwen2:7b}
+    timeout: 120

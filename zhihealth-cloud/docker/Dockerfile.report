@@ -1,0 +1,16 @@
+# 智康云枢 - 报告服务
+FROM eclipse-temurin:17-jre-alpine
+
+LABEL maintainer="zhihealth" description="ZhiHealth Report Service"
+
+WORKDIR /app
+RUN apk add --no-cache tzdata fontconfig ttf-dejavu && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+COPY zhihealth-report/target/zhihealth-report-1.0.0.jar app.jar
+
+ENV JAVA_OPTS="-Xms128m -Xmx384m"
+EXPOSE 8088
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD wget -qO- http://localhost:8088/actuator/health || exit 1
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

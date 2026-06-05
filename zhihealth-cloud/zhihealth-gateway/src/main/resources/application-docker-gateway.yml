@@ -1,0 +1,101 @@
+# 网关专用Docker配置
+server:
+  port: 8080
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        # 用户服务
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/user/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                key-resolver: "#{@ipKeyResolver}"
+
+        # 设备服务
+        - id: device-service
+          uri: lb://device-service
+          predicates:
+            - Path=/api/device/**
+          filters:
+            - StripPrefix=1
+
+        # 数据采集服务
+        - id: collect-service
+          uri: lb://collect-service
+          predicates:
+            - Path=/api/collect/**
+          filters:
+            - StripPrefix=1
+
+        # 数据存储服务
+        - id: storage-service
+          uri: lb://storage-service
+          predicates:
+            - Path=/api/storage/**,/api/data/**
+          filters:
+            - StripPrefix=1
+
+        # 缓存调度服务
+        - id: cache-service
+          uri: lb://cache-service
+          predicates:
+            - Path=/api/cache/**
+          filters:
+            - StripPrefix=1
+
+        # 预警服务
+        - id: alert-service
+          uri: lb://alert-service
+          predicates:
+            - Path=/api/alert/**,/ws/alert
+          filters:
+            - StripPrefix=1
+
+        # AI分析服务
+        - id: ai-service
+          uri: lb://ai-service
+          predicates:
+            - Path=/api/ai/**
+          filters:
+            - StripPrefix=1
+
+        # 报告服务
+        - id: report-service
+          uri: lb://report-service
+          predicates:
+            - Path=/api/report/**
+          filters:
+            - StripPrefix=1
+
+        # 日志服务
+        - id: log-service
+          uri: lb://log-service
+          predicates:
+            - Path=/api/log/**
+          filters:
+            - StripPrefix=1
+
+      # 全局CORS
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+
+# JWT鉴权白名单
+security:
+  ignore-paths:
+    - /api/user/auth/login
+    - /api/user/auth/register
+    - /actuator/**

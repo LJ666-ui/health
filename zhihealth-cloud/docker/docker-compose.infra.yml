@@ -1,0 +1,104 @@
+# 智康云枢 - 基础设施服务（Nacos + MySQL + Redis + InfluxDB + MongoDB）
+version: '3.8'
+
+services:
+  # ==================== 注册与配置中心 ====================
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: zhihealth-nacos
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    environment:
+      - MODE=standalone
+      - PREFER_HOST_MODE=hostname
+      - JVM_XMS=256m
+      - JVM_XMX=512m
+    volumes:
+      - nacos-data:/home/nacos/standalone/data
+      - nacos-logs:/home/nacos/standalone/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/v1/console/health/liveness"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================== 数据库服务 ====================
+  mysql:
+    image: mysql:8.0
+    container_name: zhihealth-mysql
+    ports:
+      - "3307:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=root_2024_zhihealth
+      - MYSQL_DATABASE=zhihealth
+      - MYSQL_CHARACTER_SET_SERVER=utf8mb4
+      - MYSQL_COLLATION_SERVER=utf8mb4_unicode_ci
+    command:
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max_connections=500
+      --innodb_buffer_pool_size=256M
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot_2024_zhihealth"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ==================== 缓存服务 ====================
+  redis:
+    image: redis:7-alpine
+    container_name: zhihealth-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ==================== 时序数据库 ====================
+  influxdb:
+    image: influxdb:1.8
+    container_name: zhihealth-influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      - INFLUXDB_DB=zhihealth_metrics
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=influx_admin_2024
+      - INFLUXDB_HTTP_ENABLED=true
+    volumes:
+      - influxdb-data:/var/lib/influxdb
+
+  # ==================== 文档数据库 ====================
+  mongodb:
+    image: mongo:6
+    container_name: zhihealth-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=mongo_2024
+      - MONGO_INITDB_DATABASE=zhihealth_docs
+    volumes:
+      - mongodb-data:/data/db
+
+volumes:
+  nacos-data:
+  nacos-logs:
+  mysql-data:
+  redis-data:
+  influxdb-data:
+  mongodb-data:
+
+networks:
+  default:
+    name: zhihealth-network

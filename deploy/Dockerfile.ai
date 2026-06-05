@@ -1,0 +1,12 @@
+# AI智能服务（需要更多资源）
+FROM maven:3.9-eclipse-temurin-17 AS builder
+WORKDIR /app
+COPY zhihealth-cloud/pom.xml .
+COPY zhihealth-cloud/zhihealth-ai ./zhihealth-ai
+RUN cd zhihealth-ai && mvn clean package -DskipTests
+
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+COPY --from=builder /app/zhihealth-ai/target/*.jar app.jar
+EXPOSE 8087
+ENTRYPOINT ["java", "-Xmx1g", "-jar", "app.jar"]

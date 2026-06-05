@@ -1,0 +1,17 @@
+# 智康云枢 - AI分析服务(调用Python/Ollama)
+FROM eclipse-temurin:17-jre-alpine
+
+LABEL maintainer="zhihealth" description="ZhiHealth AI Analysis Service"
+
+WORKDIR /app
+RUN apk add --no-cache tzdata curl && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+COPY zhihealth-ai/target/zhihealth-ai-1.0.0.jar app.jar
+
+# AI服务需要更多内存（大模型推理）
+ENV JAVA_OPTS="-Xms256m -Xmx768m -XX:+UseG1GC"
+EXPOSE 8087
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD wget -qO- http://localhost:8087/actuator/health || exit 1
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

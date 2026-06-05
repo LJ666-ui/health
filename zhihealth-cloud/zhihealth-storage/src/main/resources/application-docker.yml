@@ -1,0 +1,26 @@
+# Docker环境配置
+server:
+  port: 8084
+
+spring:
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+      config:
+        enabled: false
+  datasource:
+    url: jdbc:mysql://zhihealth-mysql:3306/zhihealth_storage?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true
+    username: root
+    password: root_2024_zhihealth
+  redis:
+    host: zhihealth-redis
+    port: 6379
+  data:
+    mongodb:
+      uri: mongodb://zhihealth-mongodb:27017/zhihealth_storage
+      auto-index-creation: true
+
+logging:
+  level:
+    com.zhihealth.storage: info

@@ -1,0 +1,16 @@
+# 智康云枢 - 用户权限服务
+FROM eclipse-temurin:17-jre-alpine
+
+LABEL maintainer="zhihealth" description="ZhiHealth User Service"
+
+WORKDIR /app
+RUN apk add --no-cache tzdata && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+COPY zhihealth-user/target/zhihealth-user-*.jar app.jar
+
+ENV JAVA_OPTS="-Xms256m -Xmx512m"
+EXPOSE 8081
+
+HEALTHCHECK --interval=20s --timeout=5s --retries=3 \
+    CMD wget -qO- http://localhost:8081/actuator/health || exit 1
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

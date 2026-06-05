@@ -1,0 +1,16 @@
+# 智康云枢 - 数据存储服务(四库协同)
+FROM eclipse-temurin:17-jre-alpine
+
+LABEL maintainer="zhihealth" description="ZhiHealth Storage Service (MySQL/Redis/InfluxDB/MongoDB)"
+
+WORKDIR /app
+RUN apk add --no-cache tzdata && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+COPY zhihealth-storage/target/zhihealth-storage-*.jar app.jar
+
+ENV JAVA_OPTS="-Xms256m -Xmx512m"
+EXPOSE 8084
+
+HEALTHCHECK --interval=20s --timeout=5s --retries=3 \
+    CMD wget -qO- http://localhost:8084/actuator/health || exit 1
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

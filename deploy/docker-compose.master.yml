@@ -1,0 +1,362 @@
+# ============================================================
+#  智康云枢 - 主节点(Master) Docker Compose
+#  适配: 2核4G服务器 (资源受限模式)
+#  用途: API网关 + 微服务 + MySQL + Redis + Nacos
+# ============================================================
+
+version: '3.8'
+
+services:
+  # ==================== 核心数据库（已有容器复用）====================
+  
+  mysql:
+    image: mysql:8.0
+    container_name: zhihealth-mysql
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-root_2024_zhihealth}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --max_connections=200
+      - --innodb_buffer_pool_size=512M  # 4G内存分配512M给MySQL
+      - --key_buffer_size=32M
+      - --table_open_cache=256
+      - --thread_cache_size=8
+    deploy:
+      resources:
+        limits:
+          memory: 1G          # 限制1GB内存
+          cpus: '1.0'         # 限制1核CPU
+    networks:
+      - zhihealth-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: zhihealth-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server 
+      --requirepass ${REDIS_PASSWORD:-zhihealth_redis_2024}
+      --maxmemory 256mb       # 限制Redis内存256MB
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --tcp-keepalive 60
+    volumes:
+      - redis_data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 300M        # 限制300MB
+          cpus: '0.5'         # 限制0.5核
+    networks:
+      - zhihealth-network
+
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: zhihealth-nacos
+    restart: always
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    environment:
+      MODE: standalone
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: mysql
+      MYSQL_SERVICE_PORT: 3306
+      MYSQL_SERVICE_DB_NAME: nacos_config
+      MYSQL_SERVICE_USER: root
+      MYSQL_SERVICE_PASSWORD: ${MYSQL_PASSWORD:-root_2024_zhihealth}
+      JVM_XMS: 256m            # 初始堆256MB（默认1G太大）
+      JVM_XMX: 512m            # 最大堆512MB
+      JVM_XMN: 128m            # 新生代128MB
+    volumes:
+      - nacos_data:/home/nacos/logs
+    deploy:
+      resources:
+        limits:
+          memory: 800M         # 限制800MB（含JVM+应用）
+          cpus: '1.5'          # 限制1.5核
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+    networks:
+      - zhihealth-network
+
+  # ==================== 微服务集群（轻量化启动）====================
+  
+  gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.gateway
+    container_name: zhihealth-gateway
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      NACOS_SERVER_ADDR: nacos:8848
+      REDIS_HOST: redis
+      JAVA_OPTS: "-Xms128m -Xmx256m"  # JVM内存限制
+    depends_on:
+      nacos:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 350M         # 限制350MB
+          cpus: '0.5'
+    networks:
+      - zhihealth-network
+
+  user-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.user
+    container_name: zhihealth-user
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      NACOS_SERVER_ADDR: nacos:8848
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-root_2024_zhihealth}
+      REDIS_HOST: redis
+      JAVA_OPTS: "-Xms128m -Xmx256m"
+    deploy:
+      resources:
+        limits:
+          memory: 350M
+          cpus: '0.5'
+    networks:
+      - zhihealth-network
+
+  device-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.device
+    container_name: zhihealth-device
+    restart: always
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      NACOS_SERVER_ADDR: nacos:8848
+      MYSQL_HOST: mysql
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-root_2024_zhihealth}
+      REDIS_HOST: redis
+      JAVA_OPTS: "-Xms96m -Xmx192m"   # 轻量服务减少内存
+    deploy:
+      resources:
+        limits:
+          memory: 280M
+          cpus: '0.3'
+    networks:
+      - zhihealth-network
+
+  collect-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.collect
+    container_name: zhihealth-collect
+    restart: always
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      NACOS_SERVER_ADDR: nacos:8848
+      MYSQL_HOST: mysql
+      INFLUXDB_HOST: ${SLAVE_IP:-39.105.129.207}  # 从节点InfluxDB
+      REDIS_HOST: redis
+      JAVA_OPTS: "-Xms96m -Xmx192m"
+    deploy:
+      resources:
+        limits:
+          memory: 280M
+          cpus: '0.3'
+    networks:
+      - zhihealth-network
+
+  storage-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.storage
+    container_name: zhihealth-storage
+    restart: always
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      NACOS_SERVER_ADDR: nacos:8848
+      MYSQL_HOST: mysql
+      MONGODB_HOST: ${SLAVE_IP:-39.105.129.207}  # 从节点MongoDB
+      INFLUXDB_HOST: ${SLAVE_IP:-39.105.129.207}
+      REDIS_HOST: redis
+      JAVA_OPTS: "-Xms96m -Xmx192m"
+    deploy:
+      resources:
+        limits:
+          memory: 280M
+          cpus: '0.3'
+    networks:
+      - zhihealth-network
+
+  cache-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cache
+    container_name: zhihealth-cache
+    restart: always
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      REDIS_HOST: redis
+      JAVA_OPTS: "-Xms64m -Xmx128m"  # 最小服务
+    deploy:
+      resources:
+        limits:
+          memory: 180M
+          cpus: '0.2'
+    networks:
+      - zhihealth-network
+
+  alert-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.alert
+    container_name: zhihealth-alert
+    restart: always
+    ports:
+      - "8090:8090"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      NACOS_SERVER_ADDR: nacos:8848
+      MYSQL_HOST: mysql
+      REDIS_HOST: redis
+      JAVA_OPTS: "-Xms96m -Xmx192m"
+    deploy:
+      resources:
+        limits:
+          memory: 280M
+          cpus: '0.3'
+    networks:
+      - zhihealth-network
+
+  report-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.report
+    container_name: zhihealth-report
+    restart: always
+    ports:
+      - "8091:8091"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      MYSQL_HOST: mysql
+      REDIS_HOST: redis
+      JAVA_OPTS: "-Xms96m -Xmx192m"
+    deploy:
+      resources:
+        limits:
+          memory: 280M
+          cpus: '0.3'
+    networks:
+      - zhihealth-network
+
+  log-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.log
+    container_name: zhihealth-log
+    restart: always
+    ports:
+      - "8089:8089"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      MYSQL_HOST: mysql
+      MONGODB_HOST: ${SLAVE_IP:-39.105.129.207}
+      JAVA_OPTS: "-Xms64m -Xmx128m"
+    deploy:
+      resources:
+        limits:
+          memory: 180M
+          cpus: '0.2'
+    networks:
+      - zhihealth-network
+
+  ai-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ai
+    container_name: zhihealth-ai
+    restart: always
+    ports:
+      - "8087:8087"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      NACOS_SERVER_ADDR: nacos:8848
+      MYSQL_HOST: mysql
+      REDIS_HOST: redis
+      JAVA_OPTS: "-Xms192m -Xmx384m"  # AI服务需要更多内存
+    deploy:
+      resources:
+        limits:
+          memory: 450M
+          cpus: '0.8'           # AI服务需要更多CPU
+    networks:
+      - zhihealth-network
+
+  # ==================== 前端Nginx ====================
+  
+  nginx:
+    image: nginx:alpine
+    container_name: zhihealth-nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ../zhihealth-frontend/dist:/usr/share/nginx/html:ro
+      - ./config/nginx.master.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - gateway
+    deploy:
+      resources:
+        limits:
+          memory: 50M          # Nginx很轻量
+          cpus: '0.1'
+    networks:
+      - zhihealth-network
+
+# ==================== 网络配置 ====================
+networks:
+  zhihealth-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ==================== 数据卷 ====================
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  nacos_data:
+    driver: local

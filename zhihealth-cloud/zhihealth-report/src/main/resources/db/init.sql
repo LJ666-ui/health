@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS `report_record` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `user_id` bigint(20) NOT NULL COMMENT '用户ID',
+  `title` varchar(255) NOT NULL COMMENT '报告标题',
+  `report_type` varchar(50) NOT NULL COMMENT '报告类型（comprehensive/specialized/trend/anomaly）',
+  `format` varchar(10) NOT NULL COMMENT '输出格式（pdf/excel/word）',
+  `status` varchar(20) NOT NULL DEFAULT 'generating' COMMENT '状态（generating/completed/failed）',
+  `file_path` varchar(500) DEFAULT NULL COMMENT '文件存储路径',
+  `file_size` bigint(20) DEFAULT NULL COMMENT '文件大小（字节）',
+  `summary` text COMMENT '报告摘要（JSON格式）',
+  `ai_insights` text COMMENT 'AI洞察结果（JSON格式）',
+  `recommendations` text COMMENT '健康建议（JSON格式）',
+  `generate_time` datetime NOT NULL COMMENT '生成时间',
+  `execution_time_ms` bigint(20) DEFAULT NULL COMMENT '执行耗时（毫秒）',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint(1) NOT NULL DEFAULT '0' COMMENT '逻辑删除（0-未删除 1-已删除）',
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_report_type` (`report_type`),
+  KEY `idx_status` (`status`),
+  KEY `idx_generate_time` (`generate_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='健康报告记录表';

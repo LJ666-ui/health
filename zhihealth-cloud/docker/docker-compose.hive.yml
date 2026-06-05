@@ -1,0 +1,116 @@
+# ZhiHealth Hive Data Warehouse (Hadoop + Hive)
+# Custom build from openjdk base (avoids mirror 403 issues)
+# Usage: docker-compose -f docker-compose.hive.yml up -d --build
+
+services:
+
+  # ==================== HDFS Namenode ====================
+  namenode:
+    build:
+      context: .
+      dockerfile: hive/Dockerfile.namenode
+    container_name: zhihealth-namenode
+    hostname: namenode
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+      - "8020:8020"
+    volumes:
+      - hadoop-nn-data:/hadoop/dfs/name
+
+  # ==================== HDFS Datanode ====================
+  datanode:
+    build:
+      context: .
+      dockerfile: hive/Dockerfile.datanode
+    container_name: zhihealth-datanode
+    hostname: datanode
+    depends_on:
+      namenode:
+        condition: service_healthy
+    environment:
+      - HADOOP_HOME=/opt/hadoop
+      - HDFS_NAMENODE_USER=root
+      - HDFS_DATANODE_USER=root
+    volumes:
+      - hadoop-dn-data:/hadoop/dfs/data
+
+  # ==================== Hive Metastore DB (MySQL) ====================
+  hive-mysql:
+    image: mysql:8.0
+    container_name: zhihealth-hive-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: hive_root_2024
+      MYSQL_DATABASE: metastore
+      MYSQL_USER: hive
+      MYSQL_PASSWORD: hive_pass_2024
+      MYSQL_CHARACTER_SET_SERVER: latin1
+    command:
+      --character-set-server=latin1
+      --collation-server=latin1_swedish_ci
+      --max-connections=200
+    volumes:
+      - hive-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-phive_root_2024"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ==================== Hive Metastore ====================
+  hive-metastore:
+    build:
+      context: .
+      dockerfile: hive/Dockerfile.metastore
+    container_name: zhihealth-hive-metastore
+    depends_on:
+      hive-mysql:
+        condition: service_healthy
+      namenode:
+        condition: service_healthy
+    ports:
+      - "9083:9083"
+    environment:
+      - DB_URL=jdbc:mysql://hive-mysql:3306/metastore?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+      - DB_USERNAME=hive
+      - DB_PASSWORD=hive_pass_2024
+    volumes:
+      - hive-warehouse:/user/hive/warehouse
+    healthcheck:
+      test: ["CMD-SHELL", "netstat -tnlp 2>/dev/null | grep :9083 || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+
+  # ==================== HiveServer2 ====================
+  hiveserver2:
+    build:
+      context: .
+      dockerfile: hive/Dockerfile.hiveserver2
+    container_name: zhihealth-hiveserver2
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+    ports:
+      - "10000:10000"
+      - "10002:10002"
+    environment:
+      - HIVE_METASTORE_URI=thrift://hive-metastore:9083
+    volumes:
+      - hive-warehouse:/user/hive/warehouse
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:10002"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+
+volumes:
+  hadoop-nn-data:
+  hadoop-dn-data:
+  hive-mysql-data:
+  hive-warehouse:
+
+networks:
+  default:
+    name: zhihealth-network
+    external: true

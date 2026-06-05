@@ -1,0 +1,24 @@
+# ZhiHealth Hadoop DataNode - Local Build
+FROM eclipse-temurin:8-jdk-alpine
+
+LABEL maintainer="zhihealth" description="ZhiHealth HDFS DataNode"
+
+ENV HADOOP_VERSION=3.3.4
+ENV HADOOP_HOME=/opt/hadoop
+ENV PATH=$HADOOP_HOME/bin:$PATH
+ENV HDFS_NAMENODE_USER=root
+ENV HDFS_DATANODE_USER=root
+
+RUN apk add --no-cache bash procps
+
+RUN mkdir -p /opt && mkdir -p /hadoop/dfs/data
+
+COPY hive/downloads/hadoop-*.tar.gz /opt/
+RUN cd /opt && tar xzf hadoop-*.tar.gz && \
+    HADOOP_DIR=$(ls -d hadoop-* | head -1) && \
+    mv "$HADOOP_DIR" hadoop && rm -f hadoop-*.tar.gz
+
+COPY hive/core-site.xml $HADOOP_HOME/etc/hadoop/
+COPY hive/hdfs-site.xml $HADOOP_HOME/etc/hadoop/
+
+CMD ["bash", "-c", "sleep 15 && hdfs --daemon start datanode && tail -f /dev/null"]

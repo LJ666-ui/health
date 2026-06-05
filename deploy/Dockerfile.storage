@@ -1,0 +1,12 @@
+# Storage存储服务
+FROM maven:3.9-eclipse-temurin-17 AS builder
+WORKDIR /app
+COPY zhihealth-cloud/pom.xml .
+COPY zhihealth-cloud/zhihealth-storage ./zhihealth-storage
+RUN cd zhihealth-storage && mvn clean package -DskipTests
+
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+COPY --from=builder /app/zhihealth-storage/target/*.jar app.jar
+EXPOSE 8084
+ENTRYPOINT ["java", "-jar", "app.jar"]

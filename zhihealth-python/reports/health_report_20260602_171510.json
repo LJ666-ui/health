@@ -1,0 +1,260 @@
+{
+  "generated_at": "2026-06-02 17:15:07",
+  "data_summary": {
+    "total_records": 128,
+    "date_range": {
+      "start": "2026-04-30",
+      "end": "2026-06-01"
+    },
+    "unique_users": 5
+  },
+  "analysis": {
+    "heart_rate": {
+      "basic_stats": {
+        "mean": 74.85,
+        "median": 74.65,
+        "std": 12.45,
+        "min": 43.00120149393608,
+        "max": 110.61238534520088
+      },
+      "health_assessment": {
+        "status": "正常",
+        "risk_level": "正常",
+        "avg_heart_rate": 74.85,
+        "description": "心率在正常范围内"
+      },
+      "trend_analysis": {
+        "trend": "稳定",
+        "direction": "stable",
+        "change_percent": -3.02
+      },
+      "anomaly_detection": {
+        "anomalies_found": 13,
+        "anomaly_rate": "10.16%",
+        "sample_anomalies": [
+          {
+            "index": 8,
+            "values": {
+              "heart_rate": 110.61
+            }
+          },
+          {
+            "index": 11,
+            "values": {
+              "heart_rate": 97.12
+            }
+          },
+          {
+            "index": 21,
+            "values": {
+              "heart_rate": 93.34
+            }
+          },
+          {
+            "index": 24,
+            "values": {
+              "heart_rate": 106.53
+            }
+          },
+          {
+            "index": 27,
+            "values": {
+              "heart_rate": 52.43
+            }
+          },
+          {
+            "index": 51,
+            "values": {
+              "heart_rate": 47.78
+            }
+          },
+          {
+            "index": 52,
+            "values": {
+              "heart_rate": 43.0
+            }
+          },
+          {
+            "index": 74,
+            "values": {
+              "heart_rate": 54.62
+            }
+          },
+          {
+            "index": 78,
+            "values": {
+              "heart_rate": 53.33
+            }
+          },
+          {
+            "index": 79,
+            "values": {
+              "heart_rate": 50.54
+            }
+          }
+        ]
+      }
+    },
+    "blood_pressure": {
+      "systolic_stats": {
+        "mean": 119.41,
+        "median": 120.5,
+        "std": 14.35
+      },
+      "diastolic_stats": {
+        "mean": 81.34,
+        "median": 82.0,
+        "std": 10.78
+      },
+      "classification": {
+        "category": "高血压一期",
+        "level": 3,
+        "systolic": 119.41,
+        "diastolic": 81.34
+      },
+      "risk_assessment": {
+        "risk_level": "低风险",
+        "risk_score": 0,
+        "risk_factors": [],
+        "recommendation": "保持健康生活方式，定期监测血压"
+      },
+      "anomaly_detection": {
+        "anomalies_found": 13,
+        "anomaly_rate": "10.16%",
+        "sample_anomalies": [
+          {
+            "index": 2,
+            "values": {
+              "blood_pressure_systolic": 97,
+              "blood_pressure_diastolic": 108
+            }
+          },
+          {
+            "index": 7,
+            "values": {
+              "blood_pressure_systolic": 138,
+              "blood_pressure_diastolic": 103
+            }
+          },
+          {
+            "index": 10,
+            "values": {
+              "blood_pressure_systolic": 98,
+              "blood_pressure_diastolic": 58
+            }
+          },
+          {
+            "index": 18,
+            "values": {
+              "blood_pressure_systolic": 91,
+              "blood_pressure_diastolic": 61
+            }
+          },
+          {
+            "index": 33,
+            "values": {
+              "blood_pressure_systolic": 101,
+              "blood_pressure_diastolic": 101
+            }
+          },
+          {
+            "index": 43,
+            "values": {
+              "blood_pressure_systolic": 138,
+              "blood_pressure_diastolic": 100
+            }
+          },
+          {
+            "index": 60,
+            "values": {
+              "blood_pressure_systolic": 134,
+              "blood_pressure_diastolic": 59
+            }
+          },
+          {
+            "index": 65,
+            "values": {
+              "blood_pressure_systolic": 90,
+              "blood_pressure_diastolic": 99
+            }
+          },
+          {
+            "index": 75,
+            "values": {
+              "blood_pressure_systolic": 120,
+              "blood_pressure_diastolic": 53
+            }
+          },
+          {
+            "index": 86,
+            "values": {
+              "blood_pressure_systolic": 77,
+              "blood_pressure_diastolic": 65
+            }
+          }
+        ]
+      }
+    },
+    "sleep_quality": {
+      "basic_stats": {
+        "avg_sleep_hours": 6.91,
+        "median_sleep": 6.88,
+        "std": 1.5
+      },
+      "sleep_quality_score": {
+        "score": 79.2,
+        "quality_level": "良好",
+        "consistency_score": 78.3,
+        "description": "睡眠质量较好，可适当优化睡眠习惯"
+      },
+      "sleep_pattern": {
+        "pattern": "规律",
+        "weekday_avg": 7.04,
+        "weekend_avg": 6.58,
+        "difference": 0.46
+      },
+      "recommendations": [
+        "轻度睡眠不足，建议适当延长睡眠时间",
+        "尝试放松技巧如冥想或深呼吸"
+      ]
+    },
+    "activity_level": {
+      "basic_stats": {
+        "total_steps": 1375357,
+        "avg_daily_steps": 10744.98,
+        "max_steps": 19765,
+        "min_steps": 1067
+      },
+      "activity_level": {
+        "level": "高度活跃",
+        "health_impact": "优秀",
+        "avg_daily_steps": 10744.98
+      },
+      "weekly_trend": {
+        "trend": "稳定",
+        "change_percent": 3.91,
+        "recent_week_avg": 10527.49
+      },
+      "goal_achievement": {
+        "goal": 10000,
+        "achieved_days": 66,
+        "achievement_rate": 51.56,
+        "status": "needs_improvement"
+      }
+    }
+  },
+  "overall_health_score": {
+    "overall_score": 91.0,
+    "component_scores": {
+      "heart_rate": 100,
+      "blood_pressure": 90,
+      "sleep_quality": 79.2,
+      "activity_level": 95
+    },
+    "grade": "A"
+  },
+  "recommendations": [
+    "轻度睡眠不足，建议适当延长睡眠时间",
+    "尝试放松技巧如冥想或深呼吸"
+  ]
+}

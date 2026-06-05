@@ -1,0 +1,29 @@
+# ZhiHealth Hadoop Namenode - Local Build
+FROM eclipse-temurin:8-jdk-alpine
+
+LABEL maintainer="zhihealth" description="ZhiHealth HDFS NameNode"
+
+ENV HADOOP_VERSION=3.3.4
+ENV HADOOP_HOME=/opt/hadoop
+ENV PATH=$HADOOP_HOME/bin:$PATH
+ENV HDFS_NAMENODE_USER=root
+ENV HDFS_DATANODE_USER=root
+
+RUN apk add --no-cache bash procps curl
+
+RUN mkdir -p /opt && mkdir -p /hadoop/dfs/name /hadoop/dfs/data
+
+COPY hive/downloads/hadoop-*.tar.gz /opt/
+RUN cd /opt && tar xzf hadoop-*.tar.gz && \
+    HADOOP_DIR=$(ls -d hadoop-* | head -1) && \
+    mv "$HADOOP_DIR" hadoop && rm -f hadoop-*.tar.gz
+
+COPY hive/core-site.xml $HADOOP_HOME/etc/hadoop/
+COPY hive/hdfs-site.xml $HADOOP_HOME/etc/hadoop/
+
+EXPOSE 9870 9000 8020
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD curl -sf http://localhost:9870 || exit 1
+
+CMD ["bash", "-c", "hdfs namenode -format -force 2>/dev/null; hdfs --daemon start namenode; tail -f /dev/null"]

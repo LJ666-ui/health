@@ -1,0 +1,206 @@
+# 智康云枢 - 微服务编排（依赖基础设施）
+version: '3.8'
+
+services:
+  # ==================== 网关服务 ====================
+  gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.gateway
+    container_name: zhihealth-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=zhihealth-nacos:8848
+      - REDIS_HOST=zhihealth-redis
+      - REDIS_PORT=6379
+    depends_on:
+      nacos:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==================== 用户权限服务 ====================
+  user-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.user
+    container_name: zhihealth-user
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=zhihealth-nacos:8848
+      - MYSQL_HOST=zhihealth-mysql
+      - MYSQL_PORT=3306
+      - MYSQL_PASSWORD=root_2024_zhihealth
+      - SPRING_DATASOURCE_URL=jdbc:mysql://zhihealth-mysql:3306/zhihealth_user?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root_2024_zhihealth
+      - REDIS_HOST=zhihealth-redis
+      - REDIS_PORT=6379
+    depends_on:
+      nacos:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==================== 设备管理服务 ====================
+  device-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.device
+    container_name: zhihealth-device
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=zhihealth-nacos:8848
+      - MYSQL_HOST=zhihealth-mysql
+      - MYSQL_PASSWORD=root_2024_zhihealth
+      - REDIS_HOST=zhihealth-redis
+    depends_on:
+      nacos:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==================== 数据采集服务 ====================
+  collect-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.collect
+    container_name: zhihealth-collect
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=zhihealth-nacos:8848
+      - REDIS_HOST=zhihealth-redis
+    depends_on:
+      nacos:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==================== 数据存储服务 ====================
+  storage-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.storage
+    container_name: zhihealth-storage
+    ports:
+      - "8084:8084"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=zhihealth-nacos:8848
+      - MYSQL_HOST=zhihealth-mysql
+      - INFLUXDB_HOST=zhihealth-influxdb
+      - MONGODB_HOST=zhihealth-mongodb
+      - REDIS_HOST=zhihealth-redis
+      - SPRING_DATA_MONGODB_URI=mongodb://zhihealth-mongodb:27017/zhihealth_storage
+      - INFLUXDB_URL=http://zhihealth-influxdb:8086
+    depends_on:
+      nacos:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==================== 缓存调度服务 ====================
+  cache-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cache
+    container_name: zhihealth-cache
+    ports:
+      - "8085:8085"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=zhihealth-nacos:8848
+      - REDIS_HOST=zhihealth-redis
+    depends_on:
+      nacos:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==================== 预警服务 ====================
+  alert-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.alert
+    container_name: zhihealth-alert
+    ports:
+      - "8090:8086"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=zhihealth-nacos:8848
+      - MYSQL_HOST=zhihealth-mysql
+      - MYSQL_PASSWORD=root_2024_zhihealth
+      - REDIS_HOST=zhihealth-redis
+    depends_on:
+      nacos:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==================== AI分析服务 ====================
+  ai-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ai
+    container_name: zhihealth-ai
+    ports:
+      - "8087:8087"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=zhihealth-nacos:8848
+      - MYSQL_HOST=zhihealth-mysql
+      - OLLAMA_URL=http://host.docker.internal:11434
+    depends_on:
+      nacos:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # ==================== 报告服务 ====================
+  report-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.report
+    container_name: zhihealth-report
+    ports:
+      - "8091:8088"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=zhihealth-nacos:8848
+      - MYSQL_HOST=zhihealth-mysql
+    depends_on:
+      nacos:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==================== 日志服务 ====================
+  log-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.log
+    container_name: zhihealth-log
+    ports:
+      - "8089:8089"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=zhihealth-nacos:8848
+      - MYSQL_HOST=zhihealth-mysql
+    depends_on:
+      nacos:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  default:
+    name: zhihealth-network
+    external: true

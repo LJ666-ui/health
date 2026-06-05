@@ -1,0 +1,22 @@
+# 智康云枢 - 网关服务
+FROM eclipse-temurin:17-jre-alpine
+
+LABEL maintainer="zhihealth" description="ZhiHealth API Gateway"
+
+WORKDIR /app
+
+# 添加时区
+RUN apk add --no-cache tzdata && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+
+# 复制jar
+COPY zhihealth-gateway/target/zhihealth-gateway-*.jar app.jar
+
+# JVM参数（网关需要更多内存处理路由转发）
+ENV JAVA_OPTS="-Xms256m -Xmx512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=20s --timeout=5s --retries=3 \
+    CMD wget -qO- http://localhost:8080/actuator/health || exit 1
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

@@ -1,0 +1,12 @@
+# Report报告服务
+FROM maven:3.9-eclipse-temurin-17 AS builder
+WORKDIR /app
+COPY zhihealth-cloud/pom.xml .
+COPY zhihealth-cloud/zhihealth-report ./zhihealth-report
+RUN cd zhihealth-report && mvn clean package -DskipTests
+
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+COPY --from=builder /app/zhihealth-report/target/*.jar app.jar
+EXPOSE 8088
+ENTRYPOINT ["java", "-jar", "app.jar"]

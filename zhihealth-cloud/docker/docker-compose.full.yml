@@ -1,0 +1,556 @@
+# ============================================================
+#  智康云枢 - 一键全量部署（基础设施 + 微服务 + 前端）
+#  使用方式:
+#    1) 仅启动基础设施:   docker-compose -f docker-compose.full.yml up -d infra
+#    2) 仅启动微服务:     docker-compose -f docker-compose.full.yml up -d services
+#    3) 全部启动:         docker-compose -f docker-compose.full.yml up -d
+#    4) 查看状态:         docker-compose -f docker-compose.full.yml ps
+#    5) 查看日志:         docker-compose -f docker-compose.full.yml logs -f [服务名]
+#    6) 停止全部:         docker-compose -f docker-compose.full.yml down
+# ============================================================
+
+version: '3.8'
+
+# ==================== 环境变量 ====================
+x-common-env: &common-env
+  NACOS_SERVER_ADDR: nacos1:8848
+  SPRING_PROFILES_ACTIVE: docker
+  MYSQL_HOST: mysql-master
+  MYSQL_PORT: 3306
+  REDIS_HOST: redis-master
+  REDIS_PORT: 6379
+  TZ: Asia/Shanghai
+
+services:
+
+  # ════════════════════════════════════════════
+  # 第一层：基础设施（按启动顺序排列）
+  # ════════════════════════════════════════════
+
+  # ---- MySQL主库 ----
+  mysql-master:
+    image: mysql:8.0
+    container_name: zhihealth-mysql-master
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      <<: *common-env
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      MYSQL_DATABASE: zhihealth
+      MYSQL_USER: zhihealth_app
+      MYSQL_PASSWORD: app_2024_secure
+    command:
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --server-id=1
+      --log-bin=mysql-bin
+      --binlog-format=ROW
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+      --max_connections=500
+      --innodb_buffer_pool_size=256M
+    volumes:
+      - mysql-master-data:/var/lib/mysql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./sql/master-init.sql:/docker-entrypoint-initdb.d/02_replication.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-123456}"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    networks:
+      - zhihealth-net
+
+  # ---- MySQL从库 ----
+  mysql-slave:
+    image: mysql:8.0
+    container_name: zhihealth-mysql-slave
+    restart: unless-stopped
+    ports:
+      - "3307:3306"
+    environment:
+      <<: *common-env
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+    command:
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --server-id=2
+      --log-bin=mysql-bin
+      --relay-log=relay-bin
+      --read-only=1
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+      --skip-slave-start=1
+      --max_connections=300
+      --innodb_buffer_pool_size=128M
+    volumes:
+      - mysql-slave-data:/var/lib/mysql
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-123456}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - zhihealth-net
+
+  # ---- Redis主节点 ----
+  redis-master:
+    image: redis:7-alpine
+    container_name: zhihealth-redis-master
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:-redis_2024}
+      --masterauth ${REDIS_PASSWORD:-redis_2024}
+    volumes:
+      - redis-master-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_2024}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - zhihealth-net
+
+  # ---- Redis从节点 ----
+  redis-slave:
+    image: redis:7-alpine
+    container_name: zhihealth-redis-slave
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --slaveof redis-master 6379
+      --masterauth ${REDIS_PASSWORD:-redis_2024}
+      --requirepass ${REDIS_PASSWORD:-redis_2024}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-slave-data:/data
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_2024}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - zhihealth-net
+
+  # ---- Redis哨兵(监控主从，自动故障转移) ----
+  redis-sentinel-1:
+    image: redis:7-alpine
+    container_name: zhihealth-sentinel-1
+    restart: unless-stopped
+    ports:
+      - "26379:26379"
+    command: redis-sentinel /etc/redis/sentinel.conf
+    volumes:
+      - ./config/sentinel.conf:/etc/redis/sentinel.conf:ro
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      - zhihealth-net
+
+  # ---- InfluxDB时序数据库 ----
+  influxdb:
+    image: influxdb:1.8
+    container_name: zhihealth-influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      INFLUXDB_DB: health_data
+      INFLUXDB_ADMIN_USER: admin
+      INFLUXDB_ADMIN_PASSWORD: ${INFLUX_PASSWORD:-influx_2024}
+      INFLUXDB_HTTP_ENABLED: "true"
+      INFLUXDB_HTTP_AUTH_ENABLED: "false"
+    volumes:
+      - influxdb-data:/var/lib/influxdb
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zhihealth-net
+
+  # ---- MongoDB文档数据库 ----
+  mongodb:
+    image: mongo:6
+    container_name: zhihealth-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-mongo_2024}
+      MONGO_INITDB_DATABASE: zhihealth_docs
+    volumes:
+      - mongodb-data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/init.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zhihealth-net
+
+  # ---- Nacos集群节点1 ----
+  nacos1:
+    image: nacos/nacos-server:v2.3.0
+    container_name: zhihealth-nacos1
+    hostname: nacos1
+    restart: unless-stopped
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    environment:
+      MODE: cluster
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: mysql-master
+      MYSQL_SERVICE_PORT: 3306
+      MYSQL_SERVICE_DB_NAME: nacos_config
+      MYSQL_SERVICE_USER: root
+      MYSQL_SERVICE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      NACOS_SERVERS: nacos1:8848 nacos2:8848
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+      JVM_XMN: 128m
+    volumes:
+      - nacos1-data:/home/nacos/cluster/conf
+      - nacos1-logs:/home/nacos/logs
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/v1/console/health/liveness"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - zhihealth-net
+
+  # ---- Nacos集群节点2 ----
+  nacos2:
+    image: nacos/nacos-server:v2.3.0
+    container_name: zhihealth-nacos2
+    hostname: nacos2
+    restart: unless-stopped
+    ports:
+      - "8849:8848"
+      - "9850:9848"
+    environment:
+      MODE: cluster
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: mysql-master
+      MYSQL_SERVICE_PORT: 3306
+      MYSQL_SERVICE_DB_NAME: nacos_config
+      MYSQL_SERVICE_USER: root
+      MYSQL_SERVICE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      NACOS_SERVERS: nacos1:8848 nacos2:8848
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+      JVM_XMN: 128m
+    volumes:
+      - nacos2-data:/home/nacos/cluster/conf
+      - nacos2-logs:/home/nacos/logs
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/v1/console/health/liveness"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - zhihealth-net
+
+  # ---- RabbitMQ消息队列 ----
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: zhihealth-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbit_2024}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zhihealth-net
+
+  # ════════════════════════════════════════════
+  # 第二层：微服务（依赖基础设施健康后启动）
+  # ════════════════════════════════════════════
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.gateway
+    container_name: zhihealth-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      <<: *common-env
+      JAVA_OPTS: -Xms256m -Xmx512m
+    depends_on:
+      nacos1:
+        condition: service_healthy
+      redis-master:
+        condition: service_healthy
+    networks:
+      - zhihealth-net
+
+  user-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.user
+    container_name: zhihealth-user
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      <<: *common-env
+      JAVA_OPTS: -Xms256m -Xmx512m
+    depends_on:
+      nacos1:
+        condition: service_healthy
+      mysql-master:
+        condition: service_healthy
+    networks:
+      - zhihealth-net
+
+  device-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.device
+    container_name: zhihealth-device
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      <<: *common-env
+      JAVA_OPTS: -Xms128m -Xmx256m
+    depends_on:
+      nacos1:
+        condition: service_healthy
+    networks:
+      - zhihealth-net
+
+  collect-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.collect
+    container_name: zhihealth-collect
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      <<: *common-env
+      JAVA_OPTS: -Xms128m -Xmx256m
+    depends_on:
+      nacos1:
+        condition: service_healthy
+    networks:
+      - zhihealth-net
+
+  storage-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.storage
+    container_name: zhihealth-storage
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    environment:
+      <<: *common-env
+      INFLUXDB_HOST: influxdb
+      MONGODB_HOST: mongodb
+      JAVA_OPTS: -Xms256m -Xmx512m
+    depends_on:
+      nacos1:
+        condition: service_healthy
+      mysql-master:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks:
+      - zhihealth-net
+
+  cache-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cache
+    container_name: zhihealth-cache
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    environment:
+      <<: *common-env
+      JAVA_OPTS: -Xms128m -Xmx256m
+    depends_on:
+      nacos1:
+        condition: service_healthy
+    networks:
+      - zhihealth-net
+
+  alert-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.alert
+    container_name: zhihealth-alert
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      <<: *common-env
+      JAVA_OPTS: -Xms128m -Xmx256m
+    depends_on:
+      nacos1:
+        condition: service_healthy
+    networks:
+      - zhihealth-net
+
+  ai-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ai
+    container_name: zhihealth-ai
+    restart: unless-stopped
+    ports:
+      - "8087:8087"
+    environment:
+      <<: *common-env
+      OLLAMA_URL: http://host.docker.internal:11434
+      JAVA_OPTS: -Xms256m -Xmx512m
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      nacos1:
+        condition: service_healthy
+    networks:
+      - zhihealth-net
+
+  report-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.report
+    container_name: zhihealth-report
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    environment:
+      <<: *common-env
+      JAVA_OPTS: -Xms128m -Xmx256m
+    depends_on:
+      nacos1:
+        condition: service_healthy
+    networks:
+      - zhihealth-net
+
+  log-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.log
+    container_name: zhihealth-log
+    restart: unless-stopped
+    ports:
+      - "8089:8089"
+    environment:
+      <<: *common-env
+      JAVA_OPTS: -Xms128m -Xmx256m
+    depends_on:
+      nacos1:
+        condition: service_healthy
+    networks:
+      - zhihealth-net
+
+  # ════════════════════════════════════════════
+  # 第三层：前端 + Python AI服务
+  # ════════════════════════════════════════════
+
+  python-ai:
+    build:
+      context: ../zhihealth-python
+      dockerfile: Dockerfile
+    container_name: zhihealth-python-ai
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+      - "8088:8088"
+    environment:
+      OLLAMA_HOST: host.docker.internal
+      OLLAMA_PORT: 11434
+      MYSQL_HOST: mysql-master
+      REDIS_HOST: redis-master
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+      redis-master:
+        condition: service_healthy
+    networks:
+      - zhihealth-net
+
+  frontend:
+    image: nginx:alpine
+    container_name: zhihealth-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../zhihealth-frontend/dist:/usr/share/nginx/html:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      gateway:
+        condition: service_started
+    networks:
+      - zhihealth-net
+
+volumes:
+  mysql-master-data:
+  mysql-slave-data:
+  redis-master-data:
+  redis-slave-data:
+  influxdb-data:
+  mongodb-data:
+  rabbitmq-data:
+  nacos1-data:
+  nacos1-logs:
+  nacos2-data:
+  nacos2-logs:
+
+networks:
+  zhihealth-net:
+    driver: bridge

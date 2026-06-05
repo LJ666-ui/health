@@ -1,0 +1,12 @@
+# Cache缓存服务
+FROM maven:3.9-eclipse-temurin-17 AS builder
+WORKDIR /app
+COPY zhihealth-cloud/pom.xml .
+COPY zhihealth-cloud/zhihealth-cache ./zhihealth-cache
+RUN cd zhihealth-cache && mvn clean package -DskipTests
+
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+COPY --from=builder /app/zhihealth-cache/target/*.jar app.jar
+EXPOSE 8085
+ENTRYPOINT ["java", "-jar", "app.jar"]

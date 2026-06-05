@@ -1,0 +1,76 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: zhihealth-storage
+  profiles:
+    active: dev
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+        namespace: public
+      config:
+        server-addr: localhost:8848
+        namespace: public
+        file-extension: yml
+        import-check:
+          enabled: false
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/zhihealth_storage?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
+  redis:
+    host: localhost
+    port: 6379
+    database: 3
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/zhihealth_health
+      auto-index-creation: true
+
+influxdb:
+  url: http://localhost:8086
+  token: zhihealth_token_2024
+  org: zhihealth
+  bucket: health_data
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.zhihealth.storage.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+logging:
+  level:
+    com.zhihealth.storage: debug
+
+storage:
+  strategy:
+    mysql:
+      enabled: true
+      data-types: [user_profile, device_info, alert_rules]
+    redis:
+      enabled: true
+      data-types: [latest_data, session_data, cache]
+    influxdb:
+      enabled: true
+      data-types: [time_series, metrics, trends]
+    mongodb:
+      enabled: true
+      data-types: [raw_data, logs, unstructured]

@@ -1,0 +1,58 @@
+CREATE TABLE IF NOT EXISTS `alert_rule` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `rule_name` varchar(100) NOT NULL COMMENT '规则名称',
+  `rule_code` varchar(100) NOT NULL COMMENT '规则编码（唯一）',
+  `data_type` varchar(50) NOT NULL COMMENT '数据类型（heart_rate/body_temp/blood_pressure等）',
+  `metric` varchar(50) NOT NULL COMMENT '指标名称',
+  `condition` varchar(20) NOT NULL COMMENT '条件（gt/gte/lt/lte/eq/neq）',
+  `threshold` double NOT NULL COMMENT '阈值',
+  `unit` varchar(20) DEFAULT NULL COMMENT '单位',
+  `level` int(11) NOT NULL DEFAULT '2' COMMENT '预警级别（1-严重 2-警告 3-提醒 4-信息）',
+  `enabled` tinyint(1) NOT NULL DEFAULT '1' COMMENT '是否启用（0-禁用 1-启用）',
+  `description` varchar(500) DEFAULT NULL COMMENT '规则描述',
+  `user_id` bigint(20) DEFAULT NULL COMMENT '用户ID（null表示全局规则）',
+  `device_id` bigint(20) DEFAULT NULL COMMENT '设备ID（null表示适用于所有设备）',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_rule_code` (`rule_code`),
+  KEY `idx_data_type` (`data_type`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_enabled` (`enabled`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预警规则表';
+
+CREATE TABLE IF NOT EXISTS `alert_record` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `rule_id` bigint(20) NOT NULL COMMENT '规则ID',
+  `rule_name` varchar(100) NOT NULL COMMENT '规则名称',
+  `user_id` bigint(20) DEFAULT NULL COMMENT '用户ID',
+  `device_id` bigint(20) DEFAULT NULL COMMENT '设备ID',
+  `data_type` varchar(50) NOT NULL COMMENT '数据类型',
+  `metric` varchar(50) NOT NULL COMMENT '指标名称',
+  `current_value` double DEFAULT NULL COMMENT '当前值',
+  `threshold` double DEFAULT NULL COMMENT '阈值',
+  `condition` varchar(20) DEFAULT NULL COMMENT '条件',
+  `level` int(11) NOT NULL DEFAULT '2' COMMENT '预警级别（1-严重 2-警告 3-提醒 4-信息）',
+  `message` varchar(500) DEFAULT NULL COMMENT '预警消息',
+  `status` int(11) NOT NULL DEFAULT '0' COMMENT '状态（0-未处理 1-已处理）',
+  `alert_time` datetime NOT NULL COMMENT '预警触发时间',
+  `resolve_time` datetime DEFAULT NULL COMMENT '处理时间',
+  `resolved_by` varchar(50) DEFAULT NULL COMMENT '处理人',
+  `remark` varchar(500) DEFAULT NULL COMMENT '处理备注',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_rule_id` (`rule_id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_alert_time` (`alert_time`),
+  KEY `idx_level_status` (`level`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预警记录表';
+
+INSERT INTO `alert_rule` (`rule_name`, `rule_code`, `data_type`, `metric`, `condition`, `threshold`, `unit`, `level`, `enabled`, `description`) VALUES
+('心率过高', 'HEART_RATE_HIGH', 'heart_rate', 'heartRate', 'gt', 100.0, 'bpm', 1, 1, '心率超过100bpm，可能存在心动过速'),
+('心率过低', 'HEART_RATE_LOW', 'heart_rate', 'heartRate', 'lt', 60.0, 'bpm', 2, 1, '心率低于60bpm，可能存在心动过缓'),
+('体温过高', 'BODY_TEMP_HIGH', 'body_temp', 'bodyTemp', 'gt', 37.5, '°C', 1, 1, '体温超过37.5°C，可能存在发热'),
+('收缩压过高', 'BP_SYSTOLIC_HIGH', 'blood_pressure', 'bloodPressureSystolic', 'gt', 140.0, 'mmHg', 1, 1, '收缩压超过140mmHg，高血压预警'),
+('舒张压过高', 'BP_DIASTOLIC_HIGH', 'blood_pressure', 'bloodPressureDiastolic', 'gt', 90.0, 'mmHg', 2, 1, '舒张压超过90mmHg，高血压预警'),
+('血氧饱和度过低', 'SPO2_LOW', 'blood_oxygen', 'spo2', 'lt', 95.0, '%', 1, 1, '血氧饱和度低于95%，可能存在缺氧');

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZhiHealth 智慧健康大数据平台 - 实时监控大屏</title>
+    
+    <!-- ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #0c1426 0%, #1a2a4a 100%);
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        .dashboard-container {
+            width: 100vw;
+            height: 100vh;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr;
+            grid-template-rows: auto 1fr 1fr auto;
+            gap: 20px;
+        }
+
+        /* 头部标题 */
+        .header {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 15px 0;
+            background: linear-gradient(90deg, transparent, rgba(0, 150, 255, 0.3), transparent);
+            border-bottom: 2px solid #0096ff;
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: bold;
+            letter-spacing: 8px;
+            background: linear-gradient(90deg, #00d4ff, #ffffff, #00d4ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+        }
+
+        .datetime {
+            position: absolute;
+            right: 40px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 18px;
+            color: #00d4ff;
+        }
+
+        /* 面板样式 */
+        .panel {
+            background: rgba(10, 25, 50, 0.85);
+            border: 1px solid rgba(0, 150, 255, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            box-shadow: 0 8px 32px rgba(0, 150, 255, 0.15),
+                        inset 0 0 20px rgba(0, 150, 255, 0.05);
+            backdrop-filter: blur(10px);
+        }
+
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #0096ff, transparent);
+            border-radius: 12px 12px 0 0;
+        }
+
+        .panel-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #00d4ff;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .panel-title::before {
+            content: '';
+            width: 4px;
+            height: 18px;
+            background: linear-gradient(180deg, #00d4ff, #0066cc);
+            border-radius: 2px;
+        }
+
+        /* KPI卡片 */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .kpi-card {
+            background: linear-gradient(135deg, rgba(0, 80, 160, 0.3), rgba(0, 120, 200, 0.1));
+            border: 1px solid rgba(0, 150, 255, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 150, 255, 0.3);
+            border-color: #00d4ff;
+        }
+
+        .kpi-value {
+            font-size: 36px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #00d4ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 5px 0;
+        }
+
+        .kpi-label {
+            font-size: 13px;
+            color: #8ba3c7;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .kpi-trend {
+            font-size: 12px;
+            margin-top: 5px;
+            padding: 3px 8px;
+            border-radius: 10px;
+            display: inline-block;
+        }
+
+        .trend-up { color: #00ff88; background: rgba(0, 255, 136, 0.15); }
+        .trend-down { color: #ff4757; background: rgba(255, 71, 87, 0.15); }
+        .trend-stable { color: #ffa502; background: rgba(255, 165, 2, 0.15); }
+
+        /* 图表容器 */
+        .chart-container {
+            width: 100%;
+            height: calc(100% - 50px);
+        }
+
+        /* 特殊布局 */
+        .left-col {
+            grid-column: 1 / 2;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .center-col {
+            grid-column: 2 / 3;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .right-col {
+            grid-column: 3 / 4;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* 地图容器 */
+        .map-panel {
+            grid-row: span 2;
+        }
+
+        /* 警报滚动 */
+        .alert-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .alert-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin: 8px 0;
+            background: rgba(255, 71, 87, 0.1);
+            border-left: 3px solid #ff4757;
+            border-radius: 5px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .alert-item.warning {
+            background: rgba(255, 165, 2, 0.1);
+            border-left-color: #ffa502;
+        }
+
+        .alert-item.info {
+            background: rgba(0, 212, 255, 0.1);
+            border-left-color: #00d4ff;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .alert-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .alert-critical { background: #ff4757; }
+        .alert-high { background: #ffa502; }
+        .alert-medium { background: #00d4ff; }
+
+        .alert-content { flex: 1; }
+        .alert-title { font-size: 13px; font-weight: bold; margin-bottom: 3px; }
+        .alert-time { font-size: 11px; color: #8ba3c7; }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: #0096ff; border-radius: 3px; }
+
+        /* 底部状态栏 */
+        .footer {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background: rgba(10, 25, 50, 0.9);
+            border: 1px solid rgba(0, 150, 255, 0.2);
+            border-radius: 8px;
+            font-size: 13px;
+            color: #8ba3c7;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status-online { background: #00ff88; box-shadow: 0 0 10px #00ff88; }
+        .status-warning { background: #ffa502; box-shadow: 0 0 10px #ffa502; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- 头部 -->
+        <div class="header">
+            <h1>智慧健康大数据平台</h1>
+            <div class="datetime" id="datetime"></div>
+        </div>
+
+        <!-- 左侧列 -->
+        <div class="left-col">
+            <!-- 实时警报 -->
+            <div class="panel" style="flex: 1;">
+                <div class="panel-title">实时健康警报</div>
+                <div class="alert-list" id="alertList">
+                    <div class="alert-item alert-critical">
+                        <div class="alert-icon alert-critical">!</div>
+                        <div class="alert-content">
+                            <div class="alert-title">用户#1024 血压异常 (185/125 mmHg)</div>
+                            <div class="alert-time">刚刚 · 高血压危象</div>
+                        </div>
+                    </div>
+                    <div class="alert-item warning">
+                        <div class="alert-icon alert-high">⚠</div>
+                        <div class="alert-content">
+                            <div class="alert-title">用户#1089 心率过高 (138 bpm)</div>
+                            <div class="alert-time">2分钟前 · 心动过速</div>
+                        </div>
+                    </div>
+                    <div class="alert-item info">
+                        <div class="alert-icon alert-medium">ℹ</div>
+                        <div class="alert-content">
+                            <div class="alert-title">用户#1056 睡眠质量下降趋势</div>
+                            <div class="alert-time">5分钟前 · 睡眠障碍风险</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 用户健康分布 -->
+            <div class="panel" style="flex: 1.2;">
+                <div class="panel-title">用户健康等级分布</div>
+                <div class="chart-container" id="healthDistributionChart"></div>
+            </div>
+
+            <!-- 设备状态 -->
+            <div class="panel" style="flex: 0.8;">
+                <div class="panel-title">设备在线状态</div>
+                <div class="chart-container" id="deviceStatusChart"></div>
+            </div>
+        </div>
+
+        <!-- 中间列 -->
+        <div class="center-col">
+            <!-- KPI指标 -->
+            <div class="panel">
+                <div class="panel-title">核心健康指标总览</div>
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">在线用户数</div>
+                        <div class="kpi-value" id="onlineUsers">12,847</div>
+                        <div class="kpi-trend trend-up">↑ 12.5%</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">今日数据采集量</div>
+                        <div class="kpi-value" id="dataCount">892K</div>
+                        <div class="kpi-trend trend-up">↑ 23.1%</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">平均心率</div>
+                        <div class="kpi-value" id="avgHeartRate">74</div>
+                        <div class="kpi-trend trend-stable">→ 稳定</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">异常预警数</div>
+                        <div class="kpi-value" id="alertCount">47</div>
+                        <div class="kpi-trend trend-down">↓ 8.3%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 实时心率曲线 -->
+            <div class="panel" style="flex: 1.5;">
+                <div class="panel-title">实时心率监测 (最近1小时)</div>
+                <div class="chart-container" id="heartRateChart"></div>
+            </div>
+
+            <!-- 区域健康热力图 -->
+            <div class="panel map-panel">
+                <div class="panel-title">区域用户分布与健康状况</div>
+                <div class="chart-container" id="regionMapChart"></div>
+            </div>
+        </div>
+
+        <!-- 右侧列 -->
+        <div class="right-col">
+            <!-- 血压分析 -->
+            <div class="panel" style="flex: 1;">
+                <div class="panel-title">血压趋势分析 (近7日)</div>
+                <div class="chart-container" id="bloodPressureChart"></div>
+            </div>
+
+            <!-- 活动量统计 -->
+            <div class="panel" style="flex: 1;">
+                <div class="panel-title">用户活动量排行 TOP10</div>
+                <div class="chart-container" id="activityRankingChart"></div>
+            </div>
+
+            <!-- 睡眠质量 -->
+            <div class="panel" style="flex: 1;">
+                <div class="panel-title">睡眠质量分布</div>
+                <div class="chart-container" id="sleepQualityChart"></div>
+            </div>
+
+            <!-- 数据源状态 -->
+            <div class="panel" style="flex: 0.8;">
+                <div class="panel-title">数据管道状态</div>
+                <div class="chart-container" id="pipelineStatusChart"></div>
+            </div>
+        </div>
+
+        <!-- 底部状态栏 -->
+        <div class="footer">
+            <div class="status-item">
+                <span class="status-dot status-online"></span>
+                <span>Kafka流处理: 运行中</span>
+            </div>
+            <div class="status-item">
+                <span class="status-dot status-online"></span>
+                <span>Flink实时计算: 正常</span>
+            </div>
+            <div class="status-item">
+                <span class="status-dot status-online"></span>
+                <span>Hive数仓: 同步完成</span>
+            </div>
+            <div class="status-item">
+                <span class="status-dot status-warning"></span>
+                <span>InfluxDB延迟: 2.3s</span>
+            </div>
+            <div>
+                数据更新时间: <span id="lastUpdate">2026-06-02 17:45:32</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>

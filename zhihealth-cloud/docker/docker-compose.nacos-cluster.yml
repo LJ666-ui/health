@@ -1,0 +1,78 @@
+# 智康云枢 - Nacos集群模式（双节点）
+# 使用方式: docker-compose -f docker-compose.nacos-cluster.yml up -d
+# 前置条件: MySQL主库已启动且nacos_config数据库已创建
+
+version: '3.8'
+
+services:
+  # ==================== Nacos节点1（主节点-腾讯云/主库所在机器）====================
+  nacos1:
+    image: nacos/nacos-server:v2.3.0
+    container_name: zhihealth-nacos1
+    hostname: nacos1
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    environment:
+      - MODE=cluster
+      - SPRING_DATASOURCE_PLATFORM=mysql
+      - MYSQL_SERVICE_HOST=${MYSQL_HOST:-mysql}
+      - MYSQL_SERVICE_PORT=3306
+      - MYSQL_SERVICE_DB_NAME=nacos_config
+      - MYSQL_SERVICE_USER=root
+      - MYSQL_SERVICE_PASSWORD=${MYSQL_PASSWORD:-123456}
+      - NACOS_SERVERS=nacos1:8848 nacos2:8848
+      - NACOS_SERVER_IP=0.0.0.0
+      - NACOS_APPLICATION_PORT=8848
+      - JVM_XMS=256m
+      - JVM_XMX=512m
+      - JVM_XMN=128m
+    volumes:
+      - ./cluster/nacos1/logs:/home/nacos/logs
+      - ./cluster/nacos1/data:/home/nacos/cluster/conf
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/v1/console/health/liveness"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ==================== Nacos节点2（从节点）====================
+  nacos2:
+    image: nacos/nacos-server:v2.3.0
+    container_name: zhihealth-nacos2
+    hostname: nacos2
+    ports:
+      - "8849:8848"
+      - "9850:9848"
+      - "9851:9849"
+    environment:
+      - MODE=cluster
+      - SPRING_DATASOURCE_PLATFORM=mysql
+      - MYSQL_SERVICE_HOST=${MYSQL_HOST:-mysql}
+      - MYSQL_SERVICE_PORT=3306
+      - MYSQL_SERVICE_DB_NAME=nacos_config
+      - MYSQL_SERVICE_USER=root
+      - MYSQL_SERVICE_PASSWORD=${MYSQL_PASSWORD:-123456}
+      - NACOS_SERVERS=nacos1:8848 nacos2:8848
+      - NACOS_SERVER_IP=0.0.0.0
+      - NACOS_APPLICATION_PORT=8848
+      - JVM_XMS=256m
+      - JVM_XMX=512m
+      - JVM_XMN=128m
+    volumes:
+      - ./cluster/nacos2/logs:/home/nacos/logs
+      - ./cluster/nacos2/data:/home/nacos/cluster/conf
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/v1/console/health/liveness"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+networks:
+  default:
+    name: zhihealth-nacos-network

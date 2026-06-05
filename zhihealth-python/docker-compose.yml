@@ -1,0 +1,282 @@
+version: '3.8'
+
+services:
+  # ============== 基础设施服务 ==============
+  
+  mysql:
+    image: mysql:8.0
+    container_name: zhihealth-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ZhiHealth@2026
+      MYSQL_DATABASE: zhihealth
+      MYSQL_USER: zhihealth
+      MYSQL_PASSWORD: ZhiHealth123
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./deploy/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./deploy/mysql/conf.d:/etc/mysql/conf.d:ro
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zhihealth-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: zhihealth-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./deploy/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zhihealth-network
+
+  mongodb:
+    image: mongo:7
+    container_name: zhihealth-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: ZhiHealthMongo2026
+      MONGO_INITDB_DATABASE: zhihealth
+    volumes:
+      - mongo_data:/data/db
+      - ./deploy/mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zhihealth-network
+
+  influxdb:
+    image: influxdb:2.0-alpine
+    container_name: zhihealth-influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: ZhiHealthInflux2026
+      DOCKER_INFLUXDB_INIT_ORG: zhihealth
+      DOCKER_INFLUXDB_INIT_BUCKET: health_data
+      DOCKER_INFLUXDB_RETENTION: 168h
+    volumes:
+      - influx_data:/var/lib/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zhihealth-network
+
+  nacos:
+    image: nacos/nacos-server:v2.3.0
+    container_name: zhihealth-nacos
+    restart: unless-stopped
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    environment:
+      MODE: standalone
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: mysql
+      MYSQL_SERVICE_PORT: 3306
+      MYSQL_SERVICE_DB_NAME: nacos_config
+      MYSQL_SERVICE_USER: root
+      MYSQL_SERVICE_PASSWORD: ZhiHealth@2026
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+      JVM_XMN: 128m
+    volumes:
+      - nacos_logs:/home/nacos/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/v1/console/health/liveness"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - zhihealth-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: zhihealth-kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_HEAP_OPTS: "-Xmx512M -Xms256M"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - zhihealth-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zhihealth-zookeeper
+    restart: unless-stopped
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zk_data:/var/lib/zookeeper/data
+      - zk_log:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD", "nczookeeper", "ruok"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zhihealth-network
+
+  # ============== 应用服务 ==============
+  
+  python-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zhihealth-python-api
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+      - "8088:8088"
+    environment:
+      PYTHON_ENV: production
+      LOG_LEVEL: INFO
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: zhihealth
+      MYSQL_PASSWORD: ZhiHealth123
+      MYSQL_DATABASE: zhihealth
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      MONGODB_HOST: mongodb
+      MONGODB_PORT: 27017
+      MONGODB_USER: admin
+      MONGODB_PASSWORD: ZhiHealthMongo2026
+      INFLUXDB_HOST: influxdb
+      INFLUXDB_PORT: 8086
+      INFLUXDB_TOKEN: ZhiHealthInflux2026
+      INFLUXDB_ORG: zhihealth
+      NACOS_SERVER_ADDR: nacos:8848
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    volumes:
+      - ./logs:/app/logs
+      - ./ai/models:/app/ai/models
+      - ./reports:/app/reports
+      - ./data:/app/data
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/api/v1/system/status')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - zhihealth-network
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: zhihealth-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ZhiHealthGrafana2026
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: grafana-mongodb-datasource,redis-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./visualization/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/zhihealth.json:ro
+      - ./deploy/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - influxdb
+      - mysql
+      - mongodb
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - zhihealth-network
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  mongo_data:
+    driver: local
+  influx_data:
+    driver: local
+  nacos_logs:
+    driver: local
+  kafka_data:
+    driver: local
+  zk_data:
+    driver: local
+  zk_log:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  zhihealth-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

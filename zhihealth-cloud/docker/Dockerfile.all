@@ -1,0 +1,93 @@
+# ==================== 智康云枢 Dockerfile 生成脚本 ====================
+# 使用方式：将此文件中的各Dockerfile分别保存为对应文件名
+# 或使用 docker-compose.services.yml 自动构建
+
+# ---------- Gateway ----------
+FROM openjdk:8-jre-alpine
+LABEL maintainer="zhihealth-team" description="智康云枢-网关服务"
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+COPY zhihealth-gateway/target/zhihealth-gateway.jar /app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-Xmx256m", "-jar", "/app.jar"]
+
+# ---------- User Service ----------
+FROM openjdk:8-jre-alpine
+LABEL maintainer="zhihealth-team" description="智康云枢-用户权限服务"
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+COPY zhihealth-user/target/zhihealth-user.jar /app.jar
+EXPOSE 8081
+ENTRYPOINT ["java", "-Xmx256m", "-jar", "/app.jar"]
+
+# ---------- Device Service ----------
+FROM openjdk:8-jre-alpine
+LABEL maintainer="zhihealth-team" description="智康云枢-设备管理服务"
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+COPY zhihealth-device/target/zhihealth-device.jar /app.jar
+EXPOSE 8082
+ENTRYPOINT ["java", "-Xmx128m", "-jar", "/app.jar"]
+
+# ---------- Collect Service ----------
+FROM openjdk:8-jre-alpine
+LABEL maintainer="zhihealth-team" description="智康云枢-数据采集服务"
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+COPY zhihealth-collect/target/zhihealth-collect.jar /app.jar
+EXPOSE 8083
+ENTRYPOINT ["java", "-Xmx128m", "-jar", "/app.jar"]
+
+# ---------- Storage Service ----------
+FROM openjdk:8-jre-alpine
+LABEL maintainer="zhihealth-team" description="智康云枢-数据存储服务"
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+COPY zhihealth-storage/target/zhihealth-storage.jar /app.jar
+EXPOSE 8084
+ENTRYPOINT ["java", "-Xmx256m", "-jar", "/app.jar"]
+
+# ---------- Cache Service ----------
+FROM openjdk:8-jre-alpine
+LABEL maintainer="zhihealth-team" description="智康云枢-缓存调度服务"
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+COPY zhihealth-cache/target/zhihealth-cache.jar /app.jar
+EXPOSE 8085
+ENTRYPOINT ["java", "-Xmx128m", "-jar", "/app.jar"]
+
+# ---------- Alert Service ----------
+FROM openjdk:8-jre-alpine
+LABEL maintainer="zhihealth-team" description="智康云枢-预警服务"
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+COPY zhihealth-alert/target/zhihealth-alert.jar /app.jar
+EXPOSE 8086
+ENTRYPOINT ["java", "-Xmx256m", "-jar", "/app.jar"]
+
+# ---------- AI Service ----------
+FROM openjdk:8-jre-alpine
+LABEL maintainer="zhihealth-team" description="智康云枢-AI分析服务"
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+COPY zhihealth-ai/target/zhihealth-ai.jar /app.jar
+EXPOSE 8087
+ENTRYPOINT ["java", "-Xmx512m", "-jar", "/app.jar"]
+
+# ---------- Report Service ----------
+FROM openjdk:8-jre-alpine
+LABEL maintainer="zhihealth-team" description="智康云枢-报告服务"
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+COPY zhihealth-report/target/zhihealth-report.jar /app.jar
+EXPOSE 8088
+ENTRYPOINT ["java", "-Xmx256m", "-jar", "/app.jar"]
+
+# ---------- Log Service ----------
+FROM openjdk:8-jre-alpine
+LABEL maintainer="zhihealth-team" description="智康云枢-日志服务"
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+COPY zhihealth-log/target/zhihealth-log.jar /app.jar
+EXPOSE 8089
+ENTRYPOINT ["java", "-Xmx128m", "-jar", "/app.jar"]

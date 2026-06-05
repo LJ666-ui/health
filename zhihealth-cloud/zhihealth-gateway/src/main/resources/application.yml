@@ -1,0 +1,109 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: zhihealth-gateway
+  profiles:
+    active: dev
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+        namespace: public
+      config:
+        server-addr: localhost:8848
+        namespace: public
+        file-extension: yml
+        import-check:
+          enabled: false
+        shared-configs:
+          - data-id: application-common.yml
+            group: DEFAULT_GROUP
+            refresh: true
+    gateway:
+      routes:
+        - id: zhihealth-user
+          uri: lb://zhihealth-user
+          predicates:
+            - Path=/api/user/**
+          filters:
+            - StripPrefix=1
+            
+        - id: zhihealth-device
+          uri: lb://zhihealth-device
+          predicates:
+            - Path=/api/device/**
+          filters:
+            - StripPrefix=1
+            
+        - id: zhihealth-collect
+          uri: lb://zhihealth-collect
+          predicates:
+            - Path=/api/collect/**
+          filters:
+            - StripPrefix=1
+            
+        - id: zhihealth-storage
+          uri: lb://zhihealth-storage
+          predicates:
+            - Path=/api/storage/**
+          filters:
+            - StripPrefix=1
+            
+        - id: zhihealth-cache
+          uri: lb://zhihealth-cache
+          predicates:
+            - Path=/api/cache/**
+          filters:
+            - StripPrefix=1
+            
+        - id: zhihealth-alert
+          uri: lb://zhihealth-alert
+          predicates:
+            - Path=/api/alert/**
+          filters:
+            - StripPrefix=1
+            
+        - id: zhihealth-ai
+          uri: lb://zhihealth-ai
+          predicates:
+            - Path=/api/ai/**
+          filters:
+            - StripPrefix=1
+
+        - id: zhihealth-report
+          uri: lb://zhihealth-report
+          predicates:
+            - Path=/api/report/**
+          filters:
+            - StripPrefix=1
+
+        - id: zhihealth-log
+          uri: lb://zhihealth-log
+          predicates:
+            - Path=/api/log/**
+          filters:
+            - StripPrefix=1
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+
+  redis:
+    host: localhost
+    port: 6379
+    password:
+    database: 0
+
+jwt:
+  secret: zhihealth-secret-key-2024-for-health-platform-security
+  expiration: 86400000
+
+logging:
+  level:
+    com.zhihealth.gateway: debug
