@@ -99,7 +99,7 @@ services:
   
   gateway:
     build:
-      context: ..
+      context: ../zhihealth-cloud
       dockerfile: docker/Dockerfile.gateway
     container_name: zhihealth-gateway
     restart: always
@@ -125,7 +125,7 @@ services:
 
   user-service:
     build:
-      context: ..
+      context: ../zhihealth-cloud
       dockerfile: docker/Dockerfile.user
     container_name: zhihealth-user
     restart: always
@@ -149,7 +149,7 @@ services:
 
   device-service:
     build:
-      context: ..
+      context: ../zhihealth-cloud
       dockerfile: docker/Dockerfile.device
     container_name: zhihealth-device
     restart: always
@@ -172,7 +172,7 @@ services:
 
   collect-service:
     build:
-      context: ..
+      context: ../zhihealth-cloud
       dockerfile: docker/Dockerfile.collect
     container_name: zhihealth-collect
     restart: always
@@ -195,7 +195,7 @@ services:
 
   storage-service:
     build:
-      context: ..
+      context: ../zhihealth-cloud
       dockerfile: docker/Dockerfile.storage
     container_name: zhihealth-storage
     restart: always
@@ -219,7 +219,7 @@ services:
 
   cache-service:
     build:
-      context: ..
+      context: ../zhihealth-cloud
       dockerfile: docker/Dockerfile.cache
     container_name: zhihealth-cache
     restart: always
@@ -239,7 +239,7 @@ services:
 
   alert-service:
     build:
-      context: ..
+      context: ../zhihealth-cloud
       dockerfile: docker/Dockerfile.alert
     container_name: zhihealth-alert
     restart: always
@@ -261,7 +261,7 @@ services:
 
   report-service:
     build:
-      context: ..
+      context: ../zhihealth-cloud
       dockerfile: docker/Dockerfile.report
     container_name: zhihealth-report
     restart: always
@@ -282,7 +282,7 @@ services:
 
   log-service:
     build:
-      context: ..
+      context: ../zhihealth-cloud
       dockerfile: docker/Dockerfile.log
     container_name: zhihealth-log
     restart: always
@@ -303,7 +303,7 @@ services:
 
   ai-service:
     build:
-      context: ..
+      context: ../zhihealth-cloud
       dockerfile: docker/Dockerfile.ai
     container_name: zhihealth-ai
     restart: always
