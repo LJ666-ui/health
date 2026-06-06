@@ -182,7 +182,7 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       NACOS_SERVER_ADDR: nacos:8848
       MYSQL_HOST: mysql
-      INFLUXDB_HOST: ${SLAVE_IP:-39.105.129.207}  # 从节点InfluxDB
+      INFLUXDB_HOST: ${SLAVE_IP:-39.105.57.155}  # 从节点InfluxDB
       REDIS_HOST: redis
       JAVA_OPTS: "-Xms96m -Xmx192m"
     deploy:
@@ -205,8 +205,8 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       NACOS_SERVER_ADDR: nacos:8848
       MYSQL_HOST: mysql
-      MONGODB_HOST: ${SLAVE_IP:-39.105.129.207}  # 从节点MongoDB
-      INFLUXDB_HOST: ${SLAVE_IP:-39.105.129.207}
+      MONGODB_HOST: ${SLAVE_IP:-39.105.57.155}  # 从节点MongoDB
+      INFLUXDB_HOST: ${SLAVE_IP:-39.105.57.155}
       REDIS_HOST: redis
       JAVA_OPTS: "-Xms96m -Xmx192m"
     deploy:
@@ -291,7 +291,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       MYSQL_HOST: mysql
-      MONGODB_HOST: ${SLAVE_IP:-39.105.129.207}
+      MONGODB_HOST: ${SLAVE_IP:-39.105.57.155}
       JAVA_OPTS: "-Xms64m -Xmx128m"
     deploy:
       resources:

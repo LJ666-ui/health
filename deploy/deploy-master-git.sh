@@ -12,7 +12,7 @@ GIT_REPO="${1:-https://gitee.com/yourusername/zhihealth.git}"  # 替换为你的
 BRANCH="${2:-main}"
 MYSQL_PASSWORD="root_2024_zhihealth"
 REDIS_PASSWORD="zhihealth_redis_2024"
-SLAVE_IP="39.105.129.207"
+SLAVE_IP="39.105.57.155"
 
 echo "╔══════════════════════════════════════════════════╗"
 echo "║     智康云枢 主节点 一键部署向导 (Git版)        ║"
