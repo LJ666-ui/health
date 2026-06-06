@@ -1,14 +1,17 @@
 # ============================================================
 #  智康云枢 - 从节点(Slave) Docker Compose
-#  适配: 2核4G服务器 (大数据存储专用)
-#  用途: InfluxDB + MongoDB + Hive(可选)
+#  适配: 2核8G服务器（微服务集群 + 数据存储）
+#  用途: 9个业务微服务 + InfluxDB + MongoDB + 前端Nginx
+#
+#  注意：MySQL/Redis/Nacos/RabbitMQ 在主节点(182.92.1.136)
+#        本节点通过内网访问主节点基础设施
 # ============================================================
 
 version: '3.8'
 
 services:
-  # ==================== 时序数据库 ====================
-  
+  # ==================== 本地数据存储 ====================
+
   influxdb:
     image: influxdb:2.7-alpine
     container_name: zhihealth-influxdb
@@ -21,30 +24,21 @@ services:
       DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD:-admin123456}
       DOCKER_INFLUXDB_INIT_ORG: zhihealth
       DOCKER_INFLUXDB_INIT_BUCKET: health_data
-      DOCKER_INFLUXDB_INIT_RETENTION: 30d  # 数据保留30天
+      DOCKER_INFLUXDB_INIT_RETENTION: 30d
     volumes:
       - influxdb_data:/var/lib/influxdb2
-      - influxdb_config:/etc/influxdb2
     command: >
       influxd
       --storage-cache-max-memory-size=256m
-      --storage-cache-snapshot-memory-size=128m
       --query-concurrent-queries=10
     deploy:
       resources:
         limits:
-          memory: 512M         # InfluxDB限制512MB
-          cpus: '1.0'
-    healthcheck:
-      test: ["CMD", "influx", "ping"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
+          memory: 512M
+          cpus: '0.8'
     networks:
       - zhihealth-network
 
-  # ==================== 文档数据库 ====================
-  
   mongodb:
     image: mongo:6
     container_name: zhihealth-mongodb
@@ -57,39 +51,264 @@ services:
       MONGO_INITDB_DATABASE: zhihealth_storage
     volumes:
       - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
       - ./config/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     command: >
       mongod
-      --wiredTigerCacheSizeGB 0.5     # 限制MongoDB缓存512MB
-      --maxConns 200                   # 最大连接数
+      --wiredTigerCacheSizeGB 0.5
+      --maxConns 200
     deploy:
       resources:
         limits:
-          memory: 768M         # MongoDB限制768MB
+          memory: 768M
+          cpus: '0.8'
+    networks:
+      - zhihealth-network
+
+  # ==================== 业务微服务集群 ====================
+  # 所有微服务连接主节点的 MySQL/Redis/Nacos
+
+  user-service:
+    build:
+      context: ../zhihealth-cloud
+      dockerfile: docker/Dockerfile.user
+    container_name: zhihealth-user
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      NACOS_SERVER_ADDR: ${MASTER_IP:-182.92.1.136}:8848
+      MYSQL_HOST: ${MASTER_IP:-182.92.1.136}
+      MYSQL_PORT: 3306
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-root_2024_zhihealth}
+      REDIS_HOST: ${MASTER_IP:-182.92.1.136}
+      REDIS_PORT: 6379
+      JAVA_OPTS: "-Xms128m -Xmx256m"
+    deploy:
+      resources:
+        limits:
+          memory: 350M
+          cpus: '0.5'
+    networks:
+      - zhihealth-network
+
+  device-service:
+    build:
+      context: ../zhihealth-cloud
+      dockerfile: docker/Dockerfile.device
+    container_name: zhihealth-device
+    restart: always
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      NACOS_SERVER_ADDR: ${MASTER_IP:-182.92.1.136}:8848
+      MYSQL_HOST: ${MASTER_IP:-182.92.1.136}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-root_2024_zhihealth}
+      REDIS_HOST: ${MASTER_IP:-182.92.1.136}
+      REDIS_PORT: 6379
+      JAVA_OPTS: "-Xms96m -Xmx192m"
+    deploy:
+      resources:
+        limits:
+          memory: 280M
+          cpus: '0.3'
+    networks:
+      - zhihealth-network
+
+  collect-service:
+    build:
+      context: ../zhihealth-cloud
+      dockerfile: docker/Dockerfile.collect
+    container_name: zhihealth-collect
+    restart: always
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      NACOS_SERVER_ADDR: ${MASTER_IP:-182.92.1.136}:8848
+      MYSQL_HOST: ${MASTER_IP:-182.92.1.136}
+      INFLUXDB_HOST: influxdb       # 本地InfluxDB
+      INFLUXDB_PORT: 8086
+      REDIS_HOST: ${MASTER_IP:-182.92.1.136}
+      REDIS_PORT: 6379
+      JAVA_OPTS: "-Xms96m -Xmx192m"
+    deploy:
+      resources:
+        limits:
+          memory: 280M
+          cpus: '0.3'
+    depends_on:
+      - influxdb
+    networks:
+      - zhihealth-network
+
+  storage-service:
+    build:
+      context: ../zhihealth-cloud
+      dockerfile: docker/Dockerfile.storage
+    container_name: zhihealth-storage
+    restart: always
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      NACOS_SERVER_ADDR: ${MASTER_IP:-182.92.1.136}:8848
+      MYSQL_HOST: ${MASTER_IP:-182.92.1.136}
+      MONGODB_HOST: mongodb         # 本地MongoDB
+      MONGODB_PORT: 27017
+      INFLUXDB_HOST: influxdb       # 本地InfluxDB
+      INFLUXDB_PORT: 8086
+      REDIS_HOST: ${MASTER_IP:-182.92.1.136}
+      REDIS_PORT: 6379
+      JAVA_OPTS: "-Xms128m -Xmx256m"
+    deploy:
+      resources:
+        limits:
+          memory: 380M
+          cpus: '0.5'
+    depends_on:
+      - mongodb
+      - influxdb
+    networks:
+      - zhihealth-network
+
+  cache-service:
+    build:
+      context: ../zhihealth-cloud
+      dockerfile: docker/Dockerfile.cache
+    container_name: zhihealth-cache
+    restart: always
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      REDIS_HOST: ${MASTER_IP:-182.92.1.136}
+      REDIS_PORT: 6379
+      JAVA_OPTS: "-Xms64m -Xmx128m"
+    deploy:
+      resources:
+        limits:
+          memory: 180M
+          cpus: '0.2'
+    networks:
+      - zhihealth-network
+
+  alert-service:
+    build:
+      context: ../zhihealth-cloud
+      dockerfile: docker/Dockerfile.alert
+    container_name: zhihealth-alert
+    restart: always
+    ports:
+      - "8090:8090"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      NACOS_SERVER_ADDR: ${MASTER_IP:-182.92.1.136}:8848
+      MYSQL_HOST: ${MASTER_IP:-182.92.1.136}
+      REDIS_HOST: ${MASTER_IP:-182.92.1.136}
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: ${MASTER_IP:-182.92.1.136}
+      RABBITMQ_PORT: 5672
+      JAVA_OPTS: "-Xms96m -Xmx192m"
+    deploy:
+      resources:
+        limits:
+          memory: 280M
+          cpus: '0.3'
+    networks:
+      - zhihealth-network
+
+  report-service:
+    build:
+      context: ../zhihealth-cloud
+      dockerfile: docker/Dockerfile.report
+    container_name: zhihealth-report
+    restart: always
+    ports:
+      - "8091:8091"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      MYSQL_HOST: ${MASTER_IP:-182.92.1.136}
+      MYSQL_PORT: 3306
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-root_2024_zhihealth}
+      REDIS_HOST: ${MASTER_IP:-182.92.1.136}
+      REDIS_PORT: 6379
+      JAVA_OPTS: "-Xms128m -Xmx256m"
+    deploy:
+      resources:
+        limits:
+          memory: 350M
+          cpus: '0.5'
+    networks:
+      - zhihealth-network
+
+  log-service:
+    build:
+      context: ../zhihealth-cloud
+      dockerfile: docker/Dockerfile.log
+    container_name: zhihealth-log
+    restart: always
+    ports:
+      - "8089:8089"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      MYSQL_HOST: ${MASTER_IP:-182.92.1.136}
+      MYSQL_PORT: 3306
+      MONGODB_HOST: mongodb
+      MONGODB_PORT: 27017
+      JAVA_OPTS: "-Xms64m -Xmx128m"
+    deploy:
+      resources:
+        limits:
+          memory: 180M
+          cpus: '0.2'
+    depends_on:
+      - mongodb
+    networks:
+      - zhihealth-network
+
+  ai-service:
+    build:
+      context: ../zhihealth-cloud
+      dockerfile: docker/Dockerfile.ai
+    container_name: zhihealth-ai
+    restart: always
+    ports:
+      - "8087:8087"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      NACOS_SERVER_ADDR: ${MASTER_IP:-182.92.1.136}:8848
+      MYSQL_HOST: ${MASTER_IP:-182.92.1.136}
+      REDIS_HOST: ${MASTER_IP:-182.92.1.136}
+      REDIS_PORT: 6379
+      JAVA_OPTS: "-Xms192m -Xmx512m"
+    deploy:
+      resources:
+        limits:
+          memory: 600M
           cpus: '1.0'
     networks:
       - zhihealth-network
 
-  # ==================== 可选：Hive大数据栈（资源紧张时注释掉）====================
-  
-  # hive-metastore:
-  #   image: bde2020/hive:3.1.2-postgresql-metastore
-  #   container_name: zhihealth-hive-metastore
-  #   restart: always
-  #   env_file:
-  #     - .env.hive
-  #   depends_on:
-  #     - namenode
-  #     - datanode
-  #     - hive-mysql
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 1024M
-  #         cpus: '1.5'
-  #   networks:
-  #     - zhihealth-network
+  # ==================== 前端Nginx ====================
+
+  nginx:
+    image: nginx:alpine
+    container_name: zhihealth-nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ../zhihealth-frontend/dist:/usr/share/nginx/html:ro
+      - ./config/nginx.slave.conf:/etc/nginx/nginx.conf:ro
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+          cpus: '0.1'
+    networks:
+      - zhihealth-network
 
 # ==================== 网络配置 ====================
 networks:
@@ -100,9 +319,5 @@ networks:
 volumes:
   influxdb_data:
     driver: local
-  influxdb_config:
-    driver: local
   mongodb_data:
-    driver: local
-  mongodb_config:
     driver: local
